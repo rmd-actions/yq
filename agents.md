@@ -1,3 +1,17 @@
+# General rules
+✅ **DO:**
+- You can use ./yq with the `--debug-node-info` flag to get a deeper understanding of the ast.
+- run ./scripts/format.sh to format the code; then ./scripts/check.sh lint and finally ./scripts/spelling.sh to check spelling.
+- Add comprehensive tests to cover the changes
+- Run test suite to ensure there is no regression
+- Use UK english spelling
+
+❌ **DON'T:**
+- Git add or commit
+- Add comments to functions that are self-explanatory
+
+
+
 # Adding a New Encoder/Decoder
 
 This guide explains how to add support for a new format (encoder/decoder) to yq without modifying `candidate_node.go`.
@@ -182,14 +196,6 @@ Tests must be implemented in `<format>_test.go` following the `formatScenario` p
    - See `json_test.go` for more complex scenarios
 
 ## Common Patterns
-
-### Scalar-Only Formats
-Some formats only work with scalars (like base64, uri):
-```go
-if node.guessTagFromCustomType() != "!!str" {
-    return fmt.Errorf("cannot encode %v as <format>, can only operate on strings", node.Tag)
-}
-```
 
 ### Format with Indentation
 Use preferences to control output formatting:

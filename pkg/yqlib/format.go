@@ -63,11 +63,11 @@ var ShFormat = &Format{"", nil,
 }
 
 var TomlFormat = &Format{"toml", []string{},
-	func() Encoder { return NewTomlEncoder() },
+	func() Encoder { return NewTomlEncoderWithPrefs(ConfiguredTomlPreferences) },
 	func() Decoder { return NewTomlDecoder() },
 }
 
-var HclFormat = &Format{"hcl", []string{"h"},
+var HclFormat = &Format{"hcl", []string{"h", "tf"},
 	func() Encoder { return NewHclEncoder(ConfiguredHclPreferences) },
 	func() Decoder { return NewHclDecoder() },
 }
