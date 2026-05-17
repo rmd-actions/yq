@@ -2,6 +2,7 @@ package yqlib
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 	"testing"
 )
@@ -237,12 +238,11 @@ var multiplyOperatorScenarios = []expressionScenario{
 		expectedError: "cannot repeat string by a negative number (-4)",
 	},
 	{
-		description: "Multiply string X by more than 100 million",
-		// very large string.repeats causes a panic
+		description:   "Multiply string by count that exceeds result size limit",
 		skipDoc:       true,
 		document:      `n: 100000001`,
 		expression:    `"banana" * .n`,
-		expectedError: "cannot repeat string by more than 100 million (100000001)",
+		expectedError: "result of repeating string (6 bytes) by 100000001 would exceed 10485760 bytes",
 	},
 	{
 		description: "Multiply int node X string",
@@ -554,7 +554,7 @@ var multiplyOperatorScenarios = []expressionScenario{
 		document:   document,
 		expression: `.b * .c`,
 		expected: []string{
-			"D0, P[b], (!!map)::{name: dog, <<: *cat}\n",
+			"D0, P[b], (!!map)::{name: dog, \"<<\": *cat}\n",
 		},
 	},
 	{
@@ -692,6 +692,29 @@ var multiplyOperatorScenarios = []expressionScenario{
 		expected: []string{
 			"D0, P[], (!!null)::null\n",
 		},
+	},
+	{
+		// Regression test for https://issues.oss-fuzz.com/issues/418818862
+		// Large repeat count with a long string must not panic.
+		skipDoc:       true,
+		expression:    `"abc" * 99999999`,
+		expectedError: "result of repeating string (3 bytes) by 99999999 would exceed 10485760 bytes",
+	},
+	{
+		// Regression test for https://issues.oss-fuzz.com/issues/383195001
+		// Product of string length * repeat count must be bounded.
+		skipDoc:       true,
+		expression:    `"x" * 99999999`,
+		expectedError: "result of repeating string (1 bytes) by 99999999 would exceed 10485760 bytes",
+	},
+	{
+		// Pick a count whose product with len("ab") overflows int on
+		// any architecture: 2^30 on 32-bit, 2^62 on 64-bit. Doubling
+		// either yields MaxInt+1, which wraps to MinInt and bypasses
+		// a naive len*count guard.
+		skipDoc:       true,
+		expression:    fmt.Sprintf(`"ab" * %d`, 1<<(bits.UintSize-2)),
+		expectedError: fmt.Sprintf("result of repeating string (2 bytes) by %d would exceed 10485760 bytes", 1<<(bits.UintSize-2)),
 	},
 }
 
