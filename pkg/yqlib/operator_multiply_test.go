@@ -2,6 +2,7 @@ package yqlib
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 	"testing"
 )
@@ -120,7 +121,7 @@ var multiplyOperatorScenarios = []expressionScenario{
 		document:   mergeArrayWithAnchors,
 		expression: `. * .`,
 		expected: []string{
-			"D0, P[], (!!map)::sample:\n    - &a\n    - !!merge <<: *a\n",
+			"D0, P[], (!!map)::sample:\n    - &a\n    - <<: *a\n",
 		},
 	},
 	{
@@ -513,7 +514,7 @@ var multiplyOperatorScenarios = []expressionScenario{
 		environmentVariables: map[string]string{"originalPath": ".myArray", "otherPath": ".newArray", "idPath": ".a"},
 		expression:           mergeExpression,
 		expected: []string{
-			"D0, P[], (!!map)::{myArray: [{a: apple, b: appleB2}, {a: kiwi, b: kiwiB}, {a: banana, b: bananaB, c: bananaC}, {a: dingo, c: dingoC}], something: else}\n",
+			"D0, P[], (!!map)::{myArray: [{a: apple, b: appleB2}, {a: kiwi, b: kiwiB}, {a: banana, b: bananaB, c: bananaC},\n        {a: dingo, c: dingoC}], something: else}\n",
 		},
 	},
 	{
@@ -545,7 +546,7 @@ var multiplyOperatorScenarios = []expressionScenario{
 		document:    mergeDocSample,
 		expression:  `.foobar * .foobarList`,
 		expected: []string{
-			"D0, P[foobar], (!!map)::c: foobarList_c\n!!merge <<: [*foo, *bar]\nthing: foobar_thing\nb: foobarList_b\n",
+			"D0, P[foobar], (!!map)::c: foobarList_c\n<<: [*foo, *bar]\nthing: foobar_thing\nb: foobarList_b\n",
 		},
 	},
 	{
@@ -580,7 +581,7 @@ var multiplyOperatorScenarios = []expressionScenario{
 		document:    "a: 2\nb: !goat 3.5",
 		expression:  ".a = .a * .b",
 		expected: []string{
-			"D0, P[], (!!map)::a: !!float 7\nb: !goat 3.5\n",
+			"D0, P[], (!!map)::a: 7\nb: !goat 3.5\n",
 		},
 	},
 	{
@@ -707,11 +708,13 @@ var multiplyOperatorScenarios = []expressionScenario{
 		expectedError: "result of repeating string (1 bytes) by 99999999 would exceed 10485760 bytes",
 	},
 	{
-		// The size guard must not overflow: len * count can wrap to
-		// a negative or small value on 64-bit, bypassing the check.
+		// Pick a count whose product with len("ab") overflows int on
+		// any architecture: 2^30 on 32-bit, 2^62 on 64-bit. Doubling
+		// either yields MaxInt+1, which wraps to MinInt and bypasses
+		// a naive len*count guard.
 		skipDoc:       true,
-		expression:    `"ab" * 4611686018427387904`,
-		expectedError: "result of repeating string (2 bytes) by 4611686018427387904 would exceed 10485760 bytes",
+		expression:    fmt.Sprintf(`"ab" * %d`, 1<<(bits.UintSize-2)),
+		expectedError: fmt.Sprintf("result of repeating string (2 bytes) by %d would exceed 10485760 bytes", 1<<(bits.UintSize-2)),
 	},
 }
 

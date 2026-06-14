@@ -1,6 +1,6 @@
 # TOML
 
-Decode from TOML. Note that `yq` does not yet support outputting in TOML format (and therefore it cannot roundtrip)
+Encode and decode to and from TOML.
 
 
 ## Parse: Simple
@@ -382,5 +382,22 @@ role = "frontend"
 [servers.beta]
 ip = "10.0.0.2"
 role = "backend"
+```
+
+## Encode: Simple mapping produces table section
+Given a sample.yml file of:
+```yaml
+arg:
+  hello: foo
+
+```
+then
+```bash
+yq -o toml '.' sample.yml
+```
+will output
+```toml
+[arg]
+hello = "foo"
 ```
 
