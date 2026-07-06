@@ -237,6 +237,22 @@ my-other-feature = []
 my-feature = ["my-other-feature"]
 `
 
+var issue2688SampleToml = `[project]
+name = "some-project"
+version = "0.5.1"
+authors = [{name = "Author", email = "author@example.com"}]
+license = { file = "LICENSE" }
+readme = "README.md"
+`
+
+var issue2688SampleExpected = `[project]
+name = "some-project"
+version = "0.5.2"
+authors = [{ name = "Author", email = "author@example.com" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+`
+
 var rtSampleTable = `var = "x"
 
 [owner.contact]
@@ -728,6 +744,14 @@ var tomlScenarios = []formatScenario{
 	},
 	{
 		skipDoc:      true,
+		description:  "Issue 2688: inline table arrays do not change following table scope",
+		input:        issue2688SampleToml,
+		expression:   `.project.version = "0.5.2"`,
+		expected:     issue2688SampleExpected,
+		scenarioType: "roundtrip",
+	},
+	{
+		skipDoc:      true,
 		description:  "Roundtrip: key with special characters in inline table",
 		input:        rtSpecialKeyInlineTable,
 		expression:   ".",
@@ -866,6 +890,60 @@ func TestTomlScenarios(t *testing.T) {
 		genericScenarios[i] = s
 	}
 	documentScenarios(t, "usage", "toml", genericScenarios, documentTomlScenario)
+}
+
+func TestTomlEncodeJsonKeepsRootArrayBeforeTables(t *testing.T) {
+	scenario := formatScenario{
+		description: "Encode: JSON root array stays outside later tables",
+		input: `{
+  "_source": {
+    "cookie": [
+      {
+        "Domain": "",
+        "Expires": "0001-01-01T00:00:00Z",
+        "HttpOnly": false,
+        "MaxAge": 0,
+        "Name": "name",
+        "Path": "",
+        "Raw": "",
+        "RawExpires": "",
+        "SameSite": 0,
+        "Secure": false,
+        "Unparsed": null,
+        "Value": "value"
+      }
+    ]
+  },
+  "highlight": {
+    "did": [
+      "did"
+    ]
+  },
+  "sort": [
+    1
+  ]
+}`,
+		expected: `sort = [1]
+
+[[_source.cookie]]
+Domain = ""
+Expires = "0001-01-01T00:00:00Z"
+HttpOnly = false
+MaxAge = 0
+Name = "name"
+Path = ""
+Raw = ""
+RawExpires = ""
+SameSite = 0
+Secure = false
+Value = "value"
+
+[highlight]
+did = ["did"]
+`,
+	}
+
+	test.AssertResultWithContext(t, scenario.expected, mustProcessFormatScenario(scenario, NewJSONDecoder(), NewTomlEncoder()), scenario.description)
 }
 
 // TestTomlColourization tests that colourization correctly distinguishes
