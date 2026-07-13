@@ -1,16 +1,12 @@
-name: Release Docker
+name: Release Docker GitHub Action
 
 on:
-  release:
-    types: [released]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
-  publishDocker:
+  publishGithubActionDocker:
     environment: dockerhub
     env:
       IMAGE_NAME: mikefarah/yq
@@ -32,8 +28,35 @@ jobs:
         with:
           version: latest
 
-      - name: Available platforms
-        run: echo ${{ steps.buildx.outputs.platforms }} && docker version
+      - name: Verify Dockerfile base image digest matches yq:4
+        run: |
+          PINNED_DIGEST=$(grep -oE 'sha256:[a-f0-9]{64}' github-action/Dockerfile | head -1)
+          if [ -z "${PINNED_DIGEST}" ]; then
+            echo "::error::Could not find a sha256 digest in github-action/Dockerfile"
+            exit 1
+          fi
+
+          LATEST_DIGEST=$(docker buildx imagetools inspect "${IMAGE_NAME}:4" --format '{{printf "%s" .Manifest.Digest}}')
+
+          echo "Dockerfile pins: ${PINNED_DIGEST}"
+          echo "mikefarah/yq:4 is:  ${LATEST_DIGEST}"
+
+          if [ "${PINNED_DIGEST}" != "${LATEST_DIGEST}" ]; then
+            echo "::error::github-action/Dockerfile digest does not match the current mikefarah/yq:4 image"
+            echo "Update the FROM line in github-action/Dockerfile to:"
+            echo "  FROM mikefarah/yq:4@${LATEST_DIGEST}"
+            exit 1
+          fi
+
+      - name: Resolve version from yq:4
+        run: |
+          IMAGE_VERSION=$(docker run --rm "${IMAGE_NAME}:4" --version | awk '{print $NF}' | sed 's/^v//')
+          if [ -z "${IMAGE_VERSION}" ]; then
+            echo "::error::Could not determine yq version from ${IMAGE_NAME}:4"
+            exit 1
+          fi
+          echo "Resolved yq version: ${IMAGE_VERSION}"
+          echo "IMAGE_VERSION=${IMAGE_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Login to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
@@ -48,17 +71,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push github-action image
+        working-directory: github-action
         run: |
-          echo "GithubRef: ${GITHUB_REF}"
-          VERSION=${GITHUB_REF##*/}
-          echo "VERSION: ${VERSION}"
-          IMAGE_VERSION=${VERSION:1}
-          echo "IMAGE_VERSION: ${IMAGE_VERSION}"
-
           PLATFORMS="linux/amd64,linux/ppc64le,linux/arm64,linux/arm/v7,linux/s390x"
 
-          echo "Building and pushing version ${IMAGE_VERSION} of image ${IMAGE_NAME}"
+          echo "Building and pushing github-action image for version ${IMAGE_VERSION}"
           docker buildx build \
             --label "org.opencontainers.image.authors=https://github.com/mikefarah/yq/graphs/contributors" \
             --label "org.opencontainers.image.created=$(date --rfc-3339=seconds)" \
@@ -73,10 +91,10 @@ jobs:
             --platform "${PLATFORMS}" \
             --pull \
             --push \
-            -t "${IMAGE_NAME}:${IMAGE_VERSION}" \
-            -t "${IMAGE_NAME}:4" \
-            -t "${IMAGE_NAME}:latest" \
-            -t "ghcr.io/${IMAGE_NAME}:${IMAGE_VERSION}" \
-            -t "ghcr.io/${IMAGE_NAME}:4" \
-            -t "ghcr.io/${IMAGE_NAME}:latest" \
+            -t "${IMAGE_NAME}:${IMAGE_VERSION}-githubaction" \
+            -t "${IMAGE_NAME}:4-githubaction" \
+            -t "${IMAGE_NAME}:latest-githubaction" \
+            -t "ghcr.io/${IMAGE_NAME}:${IMAGE_VERSION}-githubaction" \
+            -t "ghcr.io/${IMAGE_NAME}:4-githubaction" \
+            -t "ghcr.io/${IMAGE_NAME}:latest-githubaction" \
             .
