@@ -58,6 +58,15 @@ var Base64Format = &Format{"base64", []string{},
 	func() Decoder { return NewBase64Decoder() },
 }
 
+// Base64UrlFormat is the URL- and filename-safe Base64 variant defined by
+// RFC 4648 §5: it uses `-` and `_` in place of `+` and `/`. Padding is kept
+// (matching the standard Base64Format), so round-tripping with @base64urld
+// works whether or not the input was padded.
+var Base64UrlFormat = &Format{"base64url", []string{},
+	func() Encoder { return NewBase64URLEncoder() },
+	func() Decoder { return NewBase64URLDecoder() },
+}
+
 var UriFormat = &Format{"uri", []string{},
 	func() Encoder { return NewUriEncoder() },
 	func() Decoder { return NewUriDecoder() },
@@ -102,6 +111,7 @@ var Formats = []*Format{
 	TSVFormat,
 	XMLFormat,
 	Base64Format,
+	Base64UrlFormat,
 	UriFormat,
 	ShFormat,
 	TomlFormat,
@@ -128,8 +138,11 @@ func FormatStringFromFilename(filename string) string {
 		ext := filepath.Ext(filename)
 		if len(ext) >= 2 && ext[0] == '.' {
 			format := strings.ToLower(ext[1:])
-			GetLogger().Debugf("detected format '%s'", format)
-			return format
+			if _, err := FormatFromString(format); err == nil {
+				GetLogger().Debugf("detected format '%s'", format)
+				return format
+			}
+			GetLogger().Debugf("extension '%s' is not a recognised format, defaulting to yaml", format)
 		}
 	}
 

@@ -6,16 +6,27 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var ExpressionParser ExpressionParserInterface
 
+var expressionParserOnce sync.Once
+
+// InitExpressionParser initialises the package level ExpressionParser, and is
+// safe to call concurrently. The evaluators call it on every Evaluate, so
+// without the guard two goroutines could construct a parser at the same time,
+// and newParticipleLexer populates the shared participleYqRules entries as it
+// goes, which a third goroutine could be reading through getYqDefinition.
 func InitExpressionParser() {
-	if ExpressionParser == nil {
-		ExpressionParser = newExpressionParser()
-	}
+	expressionParserOnce.Do(func() {
+		if ExpressionParser == nil {
+			ExpressionParser = newExpressionParser()
+		}
+	})
 }
 
 var log = newLogger()
@@ -161,12 +172,21 @@ func parseInt64(numberString string) (string, int64, error) {
 		numberString = strings.ReplaceAll(numberString, "_", "")
 	}
 
-	if strings.HasPrefix(numberString, "0x") ||
-		strings.HasPrefix(numberString, "0X") {
-		num, err := strconv.ParseInt(numberString[2:], 16, 64)
+	// A leading +/- sign would hide the 0x/0o prefix below, so peel it off and
+	// hand it back to ParseInt with the digits.
+	sign := ""
+	digits := numberString
+	if len(digits) > 0 && (digits[0] == '+' || digits[0] == '-') {
+		sign = digits[:1]
+		digits = digits[1:]
+	}
+
+	if strings.HasPrefix(digits, "0x") ||
+		strings.HasPrefix(digits, "0X") {
+		num, err := strconv.ParseInt(sign+digits[2:], 16, 64)
 		return "0x%X", num, err
-	} else if strings.HasPrefix(numberString, "0o") {
-		num, err := strconv.ParseInt(numberString[2:], 8, 64)
+	} else if strings.HasPrefix(digits, "0o") {
+		num, err := strconv.ParseInt(sign+digits[2:], 8, 64)
 		return "0o%o", num, err
 	}
 	num, err := strconv.ParseInt(numberString, 10, 64)
@@ -183,6 +203,34 @@ func parseInt(numberString string) (int, error) {
 	}
 
 	return int(parsed), err
+}
+
+// checkedInt64Arithmetic performs '+', '-' or '*' on two int64 values and
+// returns the exact result only when it still fits in an int64. yq refuses to
+// silently wrap on int64 overflow (see issue #2820): a result outside
+// [math.MinInt64, math.MaxInt64] is reported as an error rather than returned
+// as a wrapped (and therefore wrong) value. big.Int is used so the exact
+// product/sum/difference is computed before the range check, which avoids the
+// sign-handling pitfalls of doing the overflow detection directly on the
+// wrapped int64 result.
+func checkedInt64Arithmetic(op byte, lhsNum, rhsNum int64) (int64, error) {
+	lhs := new(big.Int).SetInt64(lhsNum)
+	rhs := new(big.Int).SetInt64(rhsNum)
+	result := new(big.Int)
+	switch op {
+	case '+':
+		result.Add(lhs, rhs)
+	case '-':
+		result.Sub(lhs, rhs)
+	case '*':
+		result.Mul(lhs, rhs)
+	default:
+		return 0, fmt.Errorf("unknown arithmetic operator %q", op)
+	}
+	if !result.IsInt64() {
+		return 0, fmt.Errorf("%v %c %v overflows int64", lhsNum, op, rhsNum)
+	}
+	return result.Int64(), nil
 }
 
 func processEscapeCharacters(original string) string {
