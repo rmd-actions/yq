@@ -167,6 +167,24 @@ g:
 			"D0, P[a], (!!str)::\n",
 		},
 	},
+	{
+		description: "Create a nested path when assigning a style in a constructed object",
+		skipDoc:     true,
+		document:    `{}`,
+		expression:  `.a.b style="double"`,
+		expected: []string{
+			"D0, P[], (!!map)::a:\n    b: \"null\"\n",
+		},
+	},
+	{
+		description: "Create the path when assigning a style as an operand of a binary operator (read-only context)",
+		skipDoc:     true,
+		document:    `{a: {b: hello}}`,
+		expression:  `({} | .a.c style="double") * .`,
+		expected: []string{
+			"D0, P[], (!!map)::{a: {c: \"null\", b: hello}}\n",
+		},
+	},
 }
 
 func TestStyleOperatorScenarios(t *testing.T) {
