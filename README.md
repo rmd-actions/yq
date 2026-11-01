@@ -115,7 +115,7 @@ snap install yq
 ```
 
 #### Snap notes
-`yq` installs with [_strict confinement_](https://docs.snapcraft.io/snap-confinement/6233) in snap, this means it doesn't have direct access to root files. To read root files you can:
+`yq` installs with [_strict confinement_](https://snapcraft.io/docs/snap-confinement) in snap, this means it doesn't have direct access to root files. To read root files you can:
 
 ```
 sudo cat /etc/myfile | yq '.a.path'
@@ -247,6 +247,12 @@ See https://mikefarah.gitbook.io/yq/usage/github-action for more.
 ```
 go install github.com/mikefarah/yq/v4@latest
 ```
+
+### Use yq as a Go library
+
+The command above installs the `yq` CLI. To use yq in a Go program instead, add it to your Go module with `go get github.com/mikefarah/yq/v4` and import `github.com/mikefarah/yq/v4/pkg/yqlib`.
+
+See [examples/library/main.go](examples/library/main.go) for a simple, runnable example (`go run ./examples/library`).
 
 ## Community Supported Installation methods
 As these are supported by the community :heart: - however, they may be out of date with the officially supported releases.

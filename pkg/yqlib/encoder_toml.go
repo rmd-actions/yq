@@ -73,6 +73,9 @@ func (te *tomlEncoder) CanHandleAliases() bool {
 // in a TOML bare key. TOML bare keys may only contain ASCII letters, ASCII
 // digits, underscores, and dashes.
 func tomlKey(key string) string {
+	if key == "" {
+		return `""`
+	}
 	for _, r := range key {
 		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' && r != '-' {
 			return fmt.Sprintf("%q", key)
@@ -463,7 +466,23 @@ func (te *tomlEncoder) writeInlineTableAttribute(w io.Writer, key string, m *Can
 	if err != nil {
 		return err
 	}
-	_, err = w.Write([]byte(tomlKey(key) + " = " + inline + "\n"))
+
+	te.wroteRootAttr = true
+
+	if err := te.writeComment(w, m.HeadComment); err != nil {
+		return err
+	}
+
+	line := tomlKey(key) + " = " + inline
+	if m.LineComment != "" {
+		lineComment := strings.TrimSpace(m.LineComment)
+		if !strings.HasPrefix(lineComment, "#") {
+			lineComment = "# " + lineComment
+		}
+		line += "  " + lineComment
+	}
+
+	_, err = w.Write([]byte(line + "\n"))
 	return err
 }
 
