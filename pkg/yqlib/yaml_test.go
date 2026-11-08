@@ -1,12 +1,25 @@
 package yqlib
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mikefarah/yq/v4/test"
 )
 
 var yamlFormatScenarios = []formatScenario{
+	{
+		description: "inline separator comment retains the following line",
+		skipDoc:     true,
+		input:       "--- # header\nfoo: 42\n",
+		expected:    "---\n# header\nfoo: 42\n",
+	},
+	{
+		description: "inline separator content retains the following line",
+		skipDoc:     true,
+		input:       "--- foo: 42\nbar: 43\n",
+		expected:    "---\nfoo: 42\nbar: 43\n",
+	},
 	{
 		description: "scalar with doc separator",
 		skipDoc:     true,
@@ -30,6 +43,12 @@ var yamlFormatScenarios = []formatScenario{
 		skipDoc:     true,
 		input:       "%YAML 1.1\r\n---\r\ncat\r\n",
 		expected:    "%YAML 1.1\r\n---\r\ncat\r\n",
+	},
+	{
+		description: "leading comment blank line (CRLF)",
+		skipDoc:     true,
+		input:       "# comment\r\n\r\ncat\r\n",
+		expected:    "# comment\r\n\r\ncat\r\n",
 	},
 	{
 		description: "comment only no trailing newline",
@@ -73,6 +92,20 @@ var yamlFormatScenarios = []formatScenario{
 		description: "multi document anchor map",
 		skipDoc:     true,
 		input:       "a: &remember mike\n---\nb: *remember",
+		expression:  "explode(.)",
+		expected:    "a: mike\n---\nb: mike\n",
+	},
+	{
+		description: "multi document anchors can be redefined",
+		skipDoc:     true,
+		input:       "a: &remember first\n---\nb: &remember second\nc: *remember\n---\nd: *remember",
+		expression:  "explode(.)",
+		expected:    "a: first\n---\nb: second\nc: second\n---\nd: second\n",
+	},
+	{
+		description: "multi document anchors retain literal dotted names",
+		skipDoc:     true,
+		input:       "a: &remember.name mike\n---\nb: *remember.name",
 		expression:  "explode(.)",
 		expected:    "a: mike\n---\nb: mike\n",
 	},
@@ -162,5 +195,24 @@ func TestYamlParseScenarios(t *testing.T) {
 func TestYamlFormatScenarios(t *testing.T) {
 	for _, tt := range yamlFormatScenarios {
 		testYamlScenario(t, tt)
+	}
+}
+
+func TestYamlDecoderInitResetsAnchors(t *testing.T) {
+	decoder := NewYamlDecoder(ConfiguredYamlPreferences)
+	err := decoder.Init(strings.NewReader("a: &remember mike\n---\nb: *remember"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err = decoder.Decode(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = decoder.Init(strings.NewReader("b: *remember")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = decoder.Decode(); err == nil || !strings.Contains(err.Error(), "unknown anchor") {
+		t.Fatalf("expected unknown anchor in a fresh stream, got %v", err)
 	}
 }
